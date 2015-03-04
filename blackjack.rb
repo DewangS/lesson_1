@@ -5,7 +5,6 @@
 require 'pry'
 
 CARDS = [2,3,4,5,6,7,8,9,10,'J','Q','K','A']
-SUIT_CARDS = ['J','Q','K','A'] 
 CARD_TYPE = ['S','C','H','D']
 CARD_TYPE_SYMBOLS = {'S' => '\u2660', 'C' => '\u2663', 'H' => '\u2665', 'D' => '\u2666'}
 PLAYER_CHOICE = ['hit','stay']
@@ -17,7 +16,7 @@ def card_totals(selected_cards)
     card_value = card[0]
     if card_value.to_i > 0
         total_value += card_value.to_i
-    elsif card_value == "J" || card_value == "Q" || card_value == "K"
+    elsif ['J', 'Q', 'K'].include?(card_value)
         total_value += 10
     elsif card_value == "A" && total_value > 10
         total_value += 1
@@ -29,7 +28,7 @@ def card_totals(selected_cards)
 end
 
 #methods to draw cards
-def draw_cards(selected_cards,card_owner)
+def draw_cards(selected_cards, card_owner)
   system "clear"
   puts "#{card_owner}'s Cards ..."
   selected_cards.each do |selected_card|
@@ -58,7 +57,7 @@ def draw_cards(selected_cards,card_owner)
 end
 
 #methods to analyse the totals and determine the result
-def round_over(player_total, dealer_total,player_deposit_amount,bet_amount)
+def game_over(player_total, dealer_total, player_cards, dealer_cards, player_deposit_amount, bet_amount, draw_dealer_cards)
   if dealer_total == player_total
     puts "It's a tie"    
     player_deposit_amount += bet_amount
@@ -75,12 +74,14 @@ def round_over(player_total, dealer_total,player_deposit_amount,bet_amount)
     puts "Congratulations ...you won"
     player_deposit_amount += (bet_amount*2)
   end 
-  
+  if draw_dealer_cards
+    draw_cards(dealer_cards, "Dealer")
+  end
   player_deposit_amount
 end
 
 #To prompt user if he wishes to play another round
-def prompt_for_another_round
+def play_another_round
   puts "Do you want to play another round?"
   another_round = gets.chomp.downcase
   while !['yes','no'].include?(another_round)
@@ -108,8 +109,18 @@ def get_bet_amount(player_deposit_amount)
   bet_amount
 end
 
+def get_hit_or_stay(player_name, player_total)
+  puts "\n#{player_name}.. your card total is #{player_total}. Do you want to hit or stay?"
+  hit_or_stay = gets.chomp.downcase
+  while !PLAYER_CHOICE.include?(hit_or_stay)
+    puts "Please enter hit or stay"
+    hit_or_stay = gets.chomp.downcase
+  end
+  hit_or_stay
+end
+
 #main logic
-begin
+
   player_name = ""
   player_total = 0
   dealer_total = 0
@@ -128,6 +139,7 @@ begin
 
   #main loop which lasts till either player decides to abort the game or there are no funds left in player's deposit
   while player_deposit_amount > 0 && another_round == "yes"
+    puts "Your remaining deposit amount is $#{player_deposit_amount}."
     bet_amount = get_bet_amount(player_deposit_amount)
     
     while another_round == "yes" 
@@ -146,85 +158,64 @@ begin
       dealer_cards.push(deck.shift) 
       player_cards.push(deck.shift)
       draw_cards(player_cards, "Player")
-      
 
       player_total = card_totals(player_cards)
       dealer_total = card_totals(dealer_cards)
-      if player_total > 21
+      
+      if player_total >= 21
         puts "\n#{player_name}'s card total is #{player_total}"
-        player_deposit_amount = round_over(player_total,dealer_total,player_deposit_amount,bet_amount)
-        break
-      end
-      if player_total == 21
-        draw_cards(dealer_cards, "Dealer")
-        puts "\n#{player_name}'s card total is #{player_total}"
-        player_deposit_amount = round_over(player_total,dealer_total,player_deposit_amount,bet_amount)
+        player_deposit_amount = game_over(player_total,dealer_total,player_cards,dealer_cards,player_deposit_amount,bet_amount,true)
         break
       else
-        puts "\n#{player_name}.. your card total is #{player_total}. Do you want to hit or stay?"
-        hit_or_stay = gets.chomp.downcase
-
-        while !PLAYER_CHOICE.include?(hit_or_stay)
-          puts "Please enter hit or stay"
-          hit_or_stay = gets.chomp.downcase
-        end
-
+        hit_or_stay = get_hit_or_stay(player_name, player_total)
         while hit_or_stay == 'hit' do
-          player_cards << deck.pop
+          player_cards << deck.shift
           player_total = card_totals(player_cards)
           draw_cards(player_cards, "Player")
-          if player_total == 21 || player_total > 21
-            draw_cards(dealer_cards, "Dealer")
-            player_deposit_amount = round_over(player_total,dealer_total,player_deposit_amount,bet_amount)
+          if player_total >= 21 
+            player_deposit_amount = game_over(player_total,dealer_total,player_cards,dealer_cards,player_deposit_amount,bet_amount,true)
             break
           else
-            puts "\n#{player_name}.. your card total is #{player_total}. Do you want to hit or stay?"
-            hit_or_stay = gets.chomp.downcase
-            while !PLAYER_CHOICE.include?(hit_or_stay)
-              puts "Please enter hit or stay"
-              hit_or_stay = get.chomp.downcase
-            end
+            hit_or_stay = get_hit_or_stay(player_name,player_total)
           end   
         end
-        if player_total == 21 || player_total > 21
+
+        if player_total >= 21 
           break
         end
 
         if hit_or_stay == 'stay'
-            if dealer_total >= 21
-               draw_cards(dealer_cards, "Dealer")
-               player_deposit_amount = round_over(player_total,dealer_total,player_deposit_amount,bet_amount)
-               break
-            end
+          if dealer_total >= 21
+             player_deposit_amount = game_over(player_total,dealer_total,player_cards,dealer_cards,player_deposit_amount,bet_amount,true)
+             break
+          end
 
-            while dealer_total < 17
-              dealer_cards << deck.pop
-              dealer_total = card_totals(dealer_cards)
-              draw_cards(dealer_cards, "Dealer")
-              if dealer_total >= 21
-                player_deposit_amount = round_over(player_total,dealer_total,player_deposit_amount,bet_amount)
-                break
-              end
-            end
+          while dealer_total < 17
+            dealer_cards << deck.shift
+            dealer_total = card_totals(dealer_cards)
+            draw_cards(dealer_cards, "Dealer")
             if dealer_total >= 21
+              player_deposit_amount = game_over(player_total,dealer_total,player_cards,dealer_cards,player_deposit_amount,bet_amount,false)
               break
             end
+          end
+          if dealer_total >= 21
+            break
+          end
         end
         if dealer_total >= 17 && dealer_total < 21 && hit_or_stay == 'stay'
-          draw_cards(dealer_cards,"Dealer")
-          player_deposit_amount = round_over(player_total,dealer_total,player_deposit_amount,bet_amount)
+          player_deposit_amount = game_over(player_total,dealer_total,player_cards,dealer_cards,player_deposit_amount,bet_amount,true)
           break        
         end
+      end
     end
     if player_deposit_amount > 0
-        another_round = prompt_for_another_round()
-        next
-      else
-        puts "\nSorry you don't have any money left in your deposit."
-        break
+      another_round = play_another_round
+      next
+    else
+      puts "\nSorry you don't have any money left in your deposit."
+      break
     end
-  end  
-  puts "Remaining player deposit is $#{player_deposit_amount}."
-end
-  puts "Your remaining player deposit is $#{player_deposit_amount}. Thanks for playing with us."
-end
+  end
+  puts "Thanks for playing with us."
+  
